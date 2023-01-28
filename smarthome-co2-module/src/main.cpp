@@ -10,7 +10,7 @@
 #include "Adafruit_MQTT_Client.h"
 
 // Passwords as scret, so will not publish them
-// Define yours with #defone in secrets.h
+// Define yours with #define in secrets.h
 
 /*
 #define MQTT_SERVER "host.com"
@@ -34,6 +34,11 @@ const char *password = WIFI_PASSWORD;
 #define OUPUT_RX PIN_D7
 #define OUPUT_TX PIN_D8
 #define OUPUT_LED PIN_D6
+
+// Led signal, define threshold, where on and off
+
+#define SIGNAL_CO2_HIGH 1000
+#define SIGNAL_CO2_LOW  800
 
 const byte s8_co2[8] = {0xfe, 0x04, 0x00, 0x03, 0x00, 0x01, 0xd5, 0xc5};
 const byte s8_fwver[8] = {0xfe, 0x04, 0x00, 0x1c, 0x00, 0x01, 0xe4, 0x03};
@@ -113,6 +118,8 @@ void setup()
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_NETWORK, WIFI_PASSWORD);
 
+    int wifi_retry = 0;
+
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(500);
@@ -121,6 +128,12 @@ void setup()
         digitalWrite(OUPUT_LED, led_state ? HIGH : LOW);
 
         led_state = !led_state;
+        wifi_retry++;
+
+        if (wifi_retry > 128) {
+            Serial.println("WiFi not connected, restarting");
+            ESP.restart();
+        }
     }
 
     digitalWrite(OUPUT_LED, LOW);
@@ -146,9 +159,6 @@ void setup()
     Serial.println();
 }
 
-int value = 0;
-
-
 void loop()
 {
     uint16_t co2;
@@ -157,6 +167,8 @@ void loop()
     co2 = readco2();
     senseair->publish(co2);
 
+    // Led control
+    // We
     if (!led_state && co2 > 1000)
     {
         digitalWrite(OUPUT_LED, HIGH);
@@ -217,8 +229,7 @@ void MQTT_connect()
         if (retries == 0)
         {
             Serial.println("Cannot connect to MQTT.  System hangs.");
-            while (1)
-                ;
+            ESP.restart();
         }
     }
     Serial.println("MQTT Connected!");
