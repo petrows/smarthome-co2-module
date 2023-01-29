@@ -55,12 +55,14 @@ SoftwareSerial swSer(OUPUT_RX, OUPUT_TX, false); // RX, TX
 byte buf[10];
 WiFiClient client;
 Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVERPORT, MQTT_USERNAME, MQTT_PASSWORD);
-Adafruit_MQTT_Publish* mqtt_senseair;
 Adafruit_MQTT_Publish* mqtt_status;
+
+uint8_t s8_version_low = 0;
+uint8_t s8_version_high = 0;
 
 void MQTT_connect();
 uint16_t readco2();
-void send_status();
+void send_status(uint16_t co2);
 
 bool led_state = false;
 char mqtt_topic[32];
@@ -113,12 +115,10 @@ void setup()
 
     Serial.begin(115200);
     swSer.begin(9600);
+
     delay(10);
 
     // Prepare MQTT topic(s)
-
-    snprintf(mqtt_topic, 32, "petrows/%s/co2", WiFi.macAddress().c_str());
-    mqtt_senseair = new Adafruit_MQTT_Publish(&mqtt, mqtt_topic);
 
     snprintf(mqtt_topic, 32, "petrows/%s/STATE", WiFi.macAddress().c_str());
     mqtt_status = new Adafruit_MQTT_Publish(&mqtt, mqtt_topic);
@@ -157,6 +157,10 @@ void setup()
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
 
+    delay(10);
+
+    // Load sensor data
+
     Serial.print("Sensor ID: ");
     swSer.write(s8_id_hi, 8);
     myread(7);
@@ -168,7 +172,9 @@ void setup()
 
     swSer.write(s8_fwver, 8);
     myread(7);
-    Serial.printf("Firmware: %d.%d", buf[3], buf[4]);
+    s8_version_high = buf[3];
+    s8_version_low = buf[4];
+    Serial.printf("Firmware: %d.%d", s8_version_high, s8_version_low);
     Serial.println();
 }
 
@@ -182,14 +188,7 @@ void loop()
     co2 = readco2();
 
     if (co2) {
-        mqtt_senseair->publish(co2);
-
-        status_send_counter++;
-        if (status_send_counter == SEND_STATUS)
-        {
-            send_status();
-            status_send_counter = 0;
-        }
+        send_status(co2);
     } else {
         Serial.printf("Sensor error, skip publish");
     }
@@ -262,17 +261,21 @@ void MQTT_connect()
     Serial.println("MQTT Connected!");
 }
 
-void send_status()
+void send_status(uint16_t co2)
 {
     char mqtt_data[1024];
+    // Convert RSSI to tasmota-style format
+    int rssi = -((int)WiFi.RSSI());
 
     snprintf(
         mqtt_data,
         1024,
-        "{\"Wifi\":{\"SSId\":\"%s\",\"BSSId\":\"%s\",\"RSSI\":%u}}",
+        "{\"S8\":{\"CO2\":%d,\"Version\":%d.%d},\"Wifi\":{\"SSId\":\"%s\",\"BSSId\":\"%s\",\"RSSI\":%d}}",
+        co2,
+        s8_version_high, s8_version_low,
         WiFi.SSID().c_str(),
         WiFi.BSSIDstr().c_str(),
-        WiFi.RSSI()
+        rssi
     );
 
     Serial.print("Status: ");
