@@ -27,6 +27,12 @@
 const char *ssid = WIFI_NETWORK;
 const char *password = WIFI_PASSWORD;
 
+// How often send measurment (seconds)
+#define SEND_DELAY_SEC 60
+
+// How often send stats (in counts of send_delay_sec)
+#define SEND_STATUS 10
+
 #define PIN_D6 12
 #define PIN_D7 13
 #define PIN_D8 15
@@ -49,10 +55,12 @@ SoftwareSerial swSer(OUPUT_RX, OUPUT_TX, false); // RX, TX
 byte buf[10];
 WiFiClient client;
 Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVERPORT, MQTT_USERNAME, MQTT_PASSWORD);
-Adafruit_MQTT_Publish* senseair;
+Adafruit_MQTT_Publish* mqtt_senseair;
+Adafruit_MQTT_Publish* mqtt_status;
 
 void MQTT_connect();
 uint16_t readco2();
+void send_status();
 
 bool led_state = false;
 char mqtt_topic[32];
@@ -103,14 +111,19 @@ void setup()
     pinMode(OUPUT_LED, OUTPUT);
     digitalWrite(OUPUT_LED, LOW);
 
-    // Prepare MQTT topic
-    snprintf(mqtt_topic, 32, "petrows/%s/co2", WiFi.macAddress().c_str());
-
     Serial.begin(115200);
     swSer.begin(9600);
     delay(10);
 
-    senseair = new Adafruit_MQTT_Publish(&mqtt, mqtt_topic);
+    // Prepare MQTT topic(s)
+
+    snprintf(mqtt_topic, 32, "petrows/%s/co2", WiFi.macAddress().c_str());
+    mqtt_senseair = new Adafruit_MQTT_Publish(&mqtt, mqtt_topic);
+
+    snprintf(mqtt_topic, 32, "petrows/%s/STATE", WiFi.macAddress().c_str());
+    mqtt_status = new Adafruit_MQTT_Publish(&mqtt, mqtt_topic);
+
+    // Connect to WiFi
 
     Serial.print("Connecting to ");
     Serial.println(WIFI_NETWORK);
@@ -159,16 +172,29 @@ void setup()
     Serial.println();
 }
 
+int status_send_counter = 0;
+
 void loop()
 {
     uint16_t co2;
 
     MQTT_connect();
     co2 = readco2();
-    senseair->publish(co2);
+
+    if (co2) {
+        mqtt_senseair->publish(co2);
+
+        status_send_counter++;
+        if (status_send_counter == SEND_STATUS)
+        {
+            send_status();
+            status_send_counter = 0;
+        }
+    } else {
+        Serial.printf("Sensor error, skip publish");
+    }
 
     // Led control
-    // We
     if (!led_state && co2 > 1000)
     {
         digitalWrite(OUPUT_LED, HIGH);
@@ -181,7 +207,7 @@ void loop()
         led_state = false;
     }
 
-    delay(60 * 1000L);
+    delay(SEND_DELAY_SEC * 1000L);
 }
 
 uint16_t readco2()
@@ -199,6 +225,7 @@ uint16_t readco2()
         Serial.print(crc, HEX);
         Serial.print("  Got: ");
         Serial.println(got, HEX);
+        return 0;
     }
     else
     {
@@ -233,4 +260,22 @@ void MQTT_connect()
         }
     }
     Serial.println("MQTT Connected!");
+}
+
+void send_status()
+{
+    char mqtt_data[1024];
+
+    snprintf(
+        mqtt_data,
+        1024,
+        "{\"Wifi\":{\"SSId\":\"%s\",\"BSSId\":\"%s\",\"RSSI\":%u}}",
+        WiFi.SSID().c_str(),
+        WiFi.BSSIDstr().c_str(),
+        WiFi.RSSI()
+    );
+
+    Serial.print("Status: ");
+    Serial.println(mqtt_data);
+    mqtt_status->publish(mqtt_data);
 }
