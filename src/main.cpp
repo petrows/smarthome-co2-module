@@ -226,12 +226,11 @@ uint16_t readco2()
         Serial.println(got, HEX);
         return 0;
     }
-    else
-    {
-        Serial.print("CO2: ");
-        Serial.println(co2);
-        // Serial.printf("%02x %02x %02x %02x %02x %02x %02x\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
-    }
+
+    Serial.print("CO2: ");
+    Serial.println(co2);
+    // Serial.printf("%02x %02x %02x %02x %02x %02x %02x\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
+
     return co2;
 }
 
@@ -270,13 +269,14 @@ void send_status(uint16_t co2)
     snprintf(
         mqtt_data,
         1024,
-        "{\"S8\":{\"CO2\":%d,\"Version\":%d.%d},\"Wifi\":{\"SSId\":\"%s\",\"BSSId\":\"%s\",\"RSSI\":%d}}",
+        "{\"S8\":{\"CO2\":%d,\"Version\":%d.%d,\"led\":%d},\"Wifi\":{\"SSId\":\"%s\",\"BSSId\":\"%s\",\"RSSI\":%d}}",
         co2,
         s8_version_high, s8_version_low,
-        WiFi.SSID().c_str(),
+        led_state,
+        WiFi.SSID()
+        .c_str(),
         WiFi.BSSIDstr().c_str(),
-        rssi
-    );
+        rssi);
 
     Serial.print("Status: ");
     Serial.println(mqtt_data);
