@@ -30,9 +30,7 @@ const char *password = WIFI_PASSWORD;
 // How often send measurment (seconds)
 #define SEND_DELAY_SEC 60
 
-// How often send stats (in counts of send_delay_sec)
-#define SEND_STATUS 10
-
+#define PIN_D5 14
 #define PIN_D6 12
 #define PIN_D7 13
 #define PIN_D8 15
