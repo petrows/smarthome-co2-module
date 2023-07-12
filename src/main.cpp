@@ -31,6 +31,7 @@ const char *password = WIFI_PASSWORD;
 // How often send measurment (seconds)
 #define SEND_DELAY_SEC 5
 
+#define PIN_D4 2
 #define PIN_D5 14
 #define PIN_D6 12
 #define PIN_D7 13
@@ -43,7 +44,7 @@ const char *password = WIFI_PASSWORD;
 #define LED_ENABLE false
 
 // DHT22 sensor
-DHT dht(PIN_D5, DHT22);
+DHT dht(PIN_D4, DHT22);
 
 // Led signal, define threshold, where on and off
 
