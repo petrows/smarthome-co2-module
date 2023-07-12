@@ -44,7 +44,7 @@ const char *password = WIFI_PASSWORD;
 #define LED_ENABLE false
 
 // DHT22 sensor
-DHT dht(PIN_D4, DHT22);
+DHT dht(PIN_D5, DHT22);
 
 // Led signal, define threshold, where on and off
 
@@ -123,6 +123,8 @@ void setup()
 
     delay(10);
 
+    dht.begin();
+
     // Prepare MQTT topic(s)
 
     snprintf(mqtt_topic, 32, "petrows/%s/STATE", WiFi.macAddress().c_str());
@@ -143,7 +145,9 @@ void setup()
         delay(500);
         Serial.print(".");
 
-        digitalWrite(OUPUT_LED, led_state ? HIGH : LOW);
+        if (LED_ENABLE) {
+            digitalWrite(OUPUT_LED, led_state ? HIGH : LOW);
+        }
 
         led_state = !led_state;
         wifi_retry++;
@@ -195,6 +199,8 @@ void loop()
     co2 = readco2();
 
     // Read DHT
+    //float h = dht.readHumidity();
+    //float t = dht.readTemperature();
     float h = dht.readHumidity();
     float t = dht.readTemperature();
 
