@@ -8,6 +8,7 @@
 #include <SoftwareSerial.h>
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
+#include "DHT.h"
 
 // Passwords as scret, so will not publish them
 // Define yours with #define in secrets.h
@@ -28,7 +29,7 @@ const char *ssid = WIFI_NETWORK;
 const char *password = WIFI_PASSWORD;
 
 // How often send measurment (seconds)
-#define SEND_DELAY_SEC 60
+#define SEND_DELAY_SEC 5
 
 #define PIN_D5 14
 #define PIN_D6 12
@@ -38,6 +39,11 @@ const char *password = WIFI_PASSWORD;
 #define OUPUT_RX PIN_D7
 #define OUPUT_TX PIN_D8
 #define OUPUT_LED PIN_D6
+
+#define LED_ENABLE false
+
+// DHT22 sensor
+DHT dht(PIN_D5, DHT22);
 
 // Led signal, define threshold, where on and off
 
@@ -60,7 +66,7 @@ uint8_t s8_version_high = 0;
 
 void MQTT_connect();
 uint16_t readco2();
-void send_status(uint16_t co2);
+void send_status(uint16_t co2, float humidity, float temperature);
 
 bool led_state = false;
 char mqtt_topic[32];
@@ -183,25 +189,33 @@ void loop()
     uint16_t co2;
 
     MQTT_connect();
+
+    // Read CO^2
     co2 = readco2();
 
+    // Read DHT
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
     if (co2) {
-        send_status(co2);
+        send_status(co2, h, t);
     } else {
         Serial.printf("Sensor error, skip publish");
     }
 
     // Led control
-    if (!led_state && co2 > 1000)
-    {
-        digitalWrite(OUPUT_LED, HIGH);
-        led_state = true;
-    }
+    if (LED_ENABLE) {
+        if (!led_state && co2 > 1000)
+        {
+            digitalWrite(OUPUT_LED, HIGH);
+            led_state = true;
+        }
 
-    if (led_state && co2 < 800)
-    {
-        digitalWrite(OUPUT_LED, LOW);
-        led_state = false;
+        if (led_state && co2 < 800)
+        {
+            digitalWrite(OUPUT_LED, LOW);
+            led_state = false;
+        }
     }
 
     delay(SEND_DELAY_SEC * 1000L);
@@ -258,21 +272,27 @@ void MQTT_connect()
     Serial.println("MQTT Connected!");
 }
 
-void send_status(uint16_t co2)
+void send_status(uint16_t co2, float humidity, float temperature)
 {
     char mqtt_data[1024];
     // Convert RSSI to tasmota-style format
     int rssi = -((int)WiFi.RSSI());
 
+    char buffer_h[6];
+    char buffer_t[6];
+
+    dtostrf(humidity, 2, 2, buffer_h);
+    dtostrf(temperature, 2, 2, buffer_t);
+
     snprintf(
         mqtt_data,
         1024,
-        "{\"S8\":{\"CO2\":%d,\"Version\":%d.%d,\"led\":%d},\"Wifi\":{\"SSId\":\"%s\",\"BSSId\":\"%s\",\"RSSI\":%d}}",
+        "{\"DHT22\":{\"Temperature\":%s,\"Humidity\":%s},\"S8\":{\"CO2\":%d,\"Version\":%d.%d,\"led\":%d},\"Wifi\":{\"SSId\":\"%s\",\"BSSId\":\"%s\",\"RSSI\":%d}}",
+        buffer_t, buffer_h,
         co2,
         s8_version_high, s8_version_low,
         led_state,
-        WiFi.SSID()
-        .c_str(),
+        WiFi.SSID().c_str(),
         WiFi.BSSIDstr().c_str(),
         rssi);
 
